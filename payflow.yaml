@@ -1,0 +1,309 @@
+openapi: 3.0.3
+info:
+  title: PayFlow API
+  version: 2.4.0
+  description: >
+    Use the PayFlow API to process payments, manage subscriptions, issue
+    refunds, and retrieve transaction history programmatically.
+  contact:
+    name: PayFlow Developer Support
+    url: https://docs.payflow.io
+servers:
+  - url: https://api.payflow.io/v2
+    description: Production
+tags:
+  - name: Payments
+    description: Charge cards, retrieve past charges, and issue refunds.
+  - name: Customers
+    description: Store and manage customer records.
+security:
+  - bearerAuth: []
+paths:
+  /payments:
+    post:
+      operationId: createPayment
+      tags: [Payments]
+      summary: Create a payment
+      description: Charges a customer's payment method and returns a payment object.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount, currency, customer_id]
+              properties:
+                amount:
+                  type: integer
+                  description: Amount in minor units (e.g. `2500` = £25.00).
+                  example: 4999
+                currency:
+                  type: string
+                  description: ISO 4217 currency code.
+                  enum: [gbp, usd, eur]
+                  example: gbp
+                customer_id:
+                  type: string
+                  description: ID of an existing customer.
+                  example: cus_9KZFXWr
+                description:
+                  type: string
+                  description: Human-readable description.
+                  example: "Pro plan - March 2026"
+                metadata:
+                  type: object
+                  description: Key-value pairs for your own use.
+                  additionalProperties: true
+      responses:
+        '200':
+          description: Payment created successfully.
+          content:
+            application/json:
+              schema:
+                \$ref: '#/components/schemas/Payment'
+        '402':
+          description: Payment failed (card error).
+          content:
+            application/json:
+              schema:
+                \$ref: '#/components/schemas/Error'
+    get:
+      operationId: listPayments
+      tags: [Payments]
+      summary: List payments
+      description: Returns a paginated list of payments, newest first.
+      parameters:
+        - name: limit
+          in: query
+          description: Number of results (1-100, default 20).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: customer_id
+          in: query
+          description: Filter by customer.
+          schema:
+            type: string
+        - name: status
+          in: query
+          description: Filter by payment status.
+          schema:
+            type: string
+            enum: [succeeded, failed, pending]
+        - name: created[gte]
+          in: query
+          description: Filter by creation date (from).
+          schema:
+            type: string
+            format: date-time
+        - name: created[lte]
+          in: query
+          description: Filter by creation date (to).
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: A paginated list of payments.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      \$ref: '#/components/schemas/Payment'
+
+  /payments/{id}:
+    get:
+      operationId: retrievePayment
+      tags: [Payments]
+      summary: Retrieve a payment
+      description: Returns a single payment object by ID.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The payment ID.
+          schema:
+            type: string
+            example: pay_8xKq9mNw
+      responses:
+        '200':
+          description: The requested payment.
+          content:
+            application/json:
+              schema:
+                \$ref: '#/components/schemas/Payment'
+        '404':
+          description: Payment not found.
+          content:
+            application/json:
+              schema:
+                \$ref: '#/components/schemas/Error'
+
+  /refunds:
+    post:
+      operationId: createRefund
+      tags: [Payments]
+      summary: Create a refund
+      description: Issues a full or partial refund for a payment.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [payment_id]
+              properties:
+                payment_id:
+                  type: string
+                  description: ID of the payment to refund.
+                  example: pay_8xKq9mNw
+                amount:
+                  type: integer
+                  description: Partial refund amount. Omit to refund in full.
+                reason:
+                  type: string
+                  description: Reason for the refund.
+                  enum: [duplicate, fraudulent, requested_by_customer]
+      responses:
+        '200':
+          description: Refund created successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    example: re_3PqK9mNw
+                  payment_id:
+                    type: string
+                    example: pay_8xKq9mNw
+                  amount:
+                    type: integer
+                    example: 4999
+                  status:
+                    type: string
+                    example: succeeded
+
+  /customers:
+    post:
+      operationId: createCustomer
+      tags: [Customers]
+      summary: Create a customer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                  description: Customer email address.
+                name:
+                  type: string
+                  description: Full name.
+                metadata:
+                  type: object
+                  description: Your custom data.
+                  additionalProperties: true
+      responses:
+        '200':
+          description: Customer created successfully.
+          content:
+            application/json:
+              schema:
+                \$ref: '#/components/schemas/Customer'
+    get:
+      operationId: listCustomers
+      tags: [Customers]
+      summary: List customers
+      description: Returns a paginated list of customers.
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: email
+          in: query
+          schema:
+            type: string
+        - name: created
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: A paginated list of customers.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      \$ref: '#/components/schemas/Customer'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: >
+        Provide your PayFlow API key as a Bearer token, e.g.
+        `Authorization: Bearer sk_live_abc123`. See the Authentication guide
+        for live vs. test key prefixes.
+  schemas:
+    Payment:
+      type: object
+      properties:
+        id:
+          type: string
+          example: pay_8xKq9mNw
+        object:
+          type: string
+          example: payment
+        status:
+          type: string
+          enum: [succeeded, failed, pending]
+          example: succeeded
+        amount:
+          type: integer
+          example: 4999
+        currency:
+          type: string
+          example: gbp
+        created:
+          type: string
+          format: date-time
+    Customer:
+      type: object
+      properties:
+        id:
+          type: string
+          example: cus_9KZFXWr
+        email:
+          type: string
+          example: inatechwriter@gmail.com
+        name:
+          type: string
+          example: Ina Banu
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: bad_request
+        message:
+          type: string
+          example: Missing required parameters.
