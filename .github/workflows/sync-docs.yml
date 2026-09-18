@@ -1,0 +1,42 @@
+name: Sync OpenAPI Spec to Portfolio
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'payflow.yaml'
+
+jobs:
+  sync-spec:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout API Repo
+        uses: actions/checkout@v4
+
+      - name: Checkout Portfolio Repo
+        uses: actions/checkout@v4
+        with:
+          repository: inaciobanu/tech-writing-portfolio
+          token: ${{ secrets.PORTFOLIO_SYNC_TOKEN }}
+          path: portfolio-repo
+
+      - name: Copy Spec and Push Updates
+        run: |
+          echo "🚚 Transferring updated openapi/payflow.yaml spec..."
+          cp payflow.yaml portfolio-repo/openapi/payflow.yaml
+          
+          cd portfolio-repo
+          
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          if git diff --quiet openapi/payflow.yaml; then
+            echo "✨ No text updates detected in the spec layout. Skipping sync."
+          else
+            echo "💾 Committing and syncing spec to documentation portfolio..."
+            git add openapi/payflow.yaml
+            git commit -m "chore(api): automated sync of payflow openapi spec from application core"
+            git push origin main
+          fi
