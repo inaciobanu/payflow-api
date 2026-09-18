@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: PayFlow API
-  version: 2.4.0
+  version: 2.5.0
   description: >
     Use the PayFlow API to process payments, manage subscriptions, issue
     refunds, and retrieve transaction history programmatically.
