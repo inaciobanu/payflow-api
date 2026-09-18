@@ -1,6 +1,6 @@
 # 💳 PayFlow Core API Service
 
-![Sync Status](https://github.com)
+[![Sync OpenAPI Spec to Portfolio](https://github.com/inaciobanu/payflow-api/actions/workflows/sync-docs.yml/badge.svg)](https://github.com/inaciobanu/payflow-api/actions/workflows/sync-docs.yml)
 
 This is the containerised backend production service for the PayFlow API network ecosystem. It serves the central OpenAPI schema dynamically and processes standard payment lifecycle payloads.
 
