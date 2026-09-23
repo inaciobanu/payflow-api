@@ -11,6 +11,21 @@ app.get('/openapi.yaml', (req, res) => {
     res.sendFile(__dirname + '/payflow.yaml');
 });
 
+// 🔐 Require a Bearer API key on every /v2 route, per the spec's bearerAuth security scheme
+app.use('/v2', (req, res, next) => {
+    const authHeader = req.headers.authorization || '';
+    const [scheme, token] = authHeader.split(' ');
+
+    if (scheme !== 'Bearer' || !token) {
+        return res.status(401).json({
+            error: "unauthorized",
+            message: "Missing or invalid API key."
+        });
+    }
+
+    next();
+});
+
 // 💳 2. The Payments Endpoint
 // This matches the exact payload structure shown on your portfolio intro page!
 app.post('/v2/payments', (req, res) => {

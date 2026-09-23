@@ -29,6 +29,7 @@ describe('POST /v2/payments contract', () => {
     it('a successful response matches the Payment schema in payflow.yaml', async () => {
         const res = await request(app)
             .post('/v2/payments')
+            .set('Authorization', 'Bearer sk_test_123')
             .send({ amount: 4999, currency: 'gbp', customer_id: 'cus_9KZFXWr' });
 
         expect(res.status).toBe(200);
@@ -41,9 +42,22 @@ describe('POST /v2/payments contract', () => {
     it('a missing-parameter response matches the Error schema in payflow.yaml', async () => {
         const res = await request(app)
             .post('/v2/payments')
+            .set('Authorization', 'Bearer sk_test_123')
             .send({ currency: 'gbp' });
 
         expect(res.status).toBe(400);
+
+        const { valid, errors } = validateAgainst('Error', res.body);
+        expect(errors).toBeNull();
+        expect(valid).toBe(true);
+    });
+
+    it('a request without a bearer token matches the Error schema and is rejected with 401', async () => {
+        const res = await request(app)
+            .post('/v2/payments')
+            .send({ amount: 4999, currency: 'gbp', customer_id: 'cus_9KZFXWr' });
+
+        expect(res.status).toBe(401);
 
         const { valid, errors } = validateAgainst('Error', res.body);
         expect(errors).toBeNull();

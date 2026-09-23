@@ -61,14 +61,37 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Payment'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '400':
-          description: Missing or invalid required parameters.
+          description: |
+            Missing or invalid required parameters.
+
+            **Cause:** One or more of `amount`, `currency`, or `customer_id` is
+            missing, or `currency` isn't one of the supported codes.
+
+            **Fix:** Check `message` for which field failed, correct the
+            request body, and resend.
+
+            **Retry:** Safe once the request body is corrected. Retrying the
+            same unmodified request will fail again.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '402':
-          description: Payment failed (card error).
+          description: |
+            Payment failed (card error).
+
+            **Cause:** The customer's payment method was declined by the
+            issuer (e.g. insufficient funds, expired card, fraud check).
+
+            **Fix:** Ask the customer to use a different payment method, or
+            contact their card issuer. Don't retry with the same details.
+
+            **Retry:** Not safe to retry unchanged. A different `amount` or
+            payment method may succeed; the identical request will keep
+            failing.
           content:
             application/json:
               schema:
@@ -122,6 +145,8 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Payment'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 
   /payments/{id}:
     get:
@@ -144,8 +169,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Payment'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
-          description: Payment not found.
+          description: |
+            Payment not found.
+
+            **Cause:** No payment exists with the given `id`, either because
+            it was mistyped or belongs to a different account/environment
+            (e.g. a test-mode ID used against production).
+
+            **Fix:** Double-check the `id` and that you're using the correct
+            API key/environment.
+
+            **Retry:** Safe, but will keep failing until the `id` or
+            environment is corrected.
           content:
             application/json:
               schema:
@@ -196,6 +234,8 @@ paths:
                   status:
                     type: string
                     example: succeeded
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 
   /customers:
     post:
@@ -227,6 +267,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Customer'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
     get:
       operationId: listCustomers
       tags: [Customers]
@@ -259,8 +301,31 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Customer'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 
 components:
+  responses:
+    Unauthorized:
+      description: |
+        Missing or invalid API key.
+
+        **Cause:** The `Authorization` header is missing, malformed, or the
+        bearer token isn't a valid PayFlow API key (or a test-mode key was
+        used against production, or vice versa).
+
+        **Fix:** Send `Authorization: Bearer <your API key>` and confirm
+        you're using a live key for production, test key for test mode.
+
+        **Retry:** Safe, but will keep failing until a valid key for the
+        right environment is supplied.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: unauthorized
+            message: Missing or invalid API key.
   securitySchemes:
     bearerAuth:
       type: http
