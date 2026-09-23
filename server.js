@@ -34,7 +34,11 @@ app.post('/v2/payments', (req, res) => {
     });
 });
 
-// Fire up the engine listener
-app.listen(PORT, () => {
-    console.log(`🚀 PayFlow Core API running on port ${PORT}`);
-});
+// Fire up the engine listener (skip when required by tests)
+if (require.main === module) {
+    app.listen(PORT, () => {
+        console.log(`🚀 PayFlow Core API running on port ${PORT}`);
+    });
+}
+
+module.exports = app;

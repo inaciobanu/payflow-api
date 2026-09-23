@@ -8,8 +8,30 @@ on:
       - 'payflow.yaml'
 
 jobs:
-  sync-spec:
+  validate-spec:
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout API Repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint OpenAPI spec
+        run: npm run lint:spec
+
+  sync-spec:
+    needs: validate-spec
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
 
     steps:
       - name: Checkout API Repo
@@ -26,12 +48,12 @@ jobs:
         run: |
           echo "🚚 Transferring updated openapi/payflow.yaml spec..."
           cp payflow.yaml portfolio-repo/openapi/payflow.yaml
-          
+
           cd portfolio-repo
-          
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          
+
           if git diff --quiet openapi/payflow.yaml; then
             echo "✨ No text updates detected in the spec layout. Skipping sync."
           else
@@ -40,3 +62,43 @@ jobs:
             git commit -m "chore(api): automated sync of payflow openapi spec from application core"
             git push origin main
           fi
+
+      - name: Notify on sync failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = 'sync-docs workflow failed';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              `The **Sync OpenAPI Spec to Portfolio** workflow failed on \`${context.sha}\`.`,
+              '',
+              `Run: ${runUrl}`,
+              '',
+              'This usually means the portfolio checkout/push step failed — check first whether',
+              '`PORTFOLIO_SYNC_TOKEN` has expired or lost `contents: write` access on',
+              '`inaciobanu/tech-writing-portfolio`.',
+            ].join('\n');
+
+            const { data: openIssues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+            });
+            const existing = openIssues.find((issue) => issue.title === title);
+
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+              });
+            }
