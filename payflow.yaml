@@ -3,8 +3,8 @@ info:
   title: PayFlow API
   version: 2.5.2
   description: >
-    Use the PayFlow API to process payments, manage subscriptions, issue
-    refunds, and retrieve transaction history programmatically.
+    Use the PayFlow API to process payments, issue refunds, manage
+    customers, and retrieve transaction history programmatically.
   contact:
     name: PayFlow Developer Support
     url: https://docs.payflow.io
@@ -437,6 +437,27 @@ components:
 
         **Retry:** Safe after waiting out the window; retrying immediately
         will fail again.
+      headers:
+        X-RateLimit-Limit:
+          description: The maximum number of requests allowed per window.
+          schema:
+            type: integer
+            example: 100
+        X-RateLimit-Remaining:
+          description: Requests remaining in the current window.
+          schema:
+            type: integer
+            example: 0
+        X-RateLimit-Reset:
+          description: Unix timestamp (seconds) when the current window resets.
+          schema:
+            type: integer
+            example: 1732104000
+        Retry-After:
+          description: Seconds to wait before retrying.
+          schema:
+            type: integer
+            example: 30
       content:
         application/json:
           schema:
