@@ -25,6 +25,8 @@ paths:
       tags: [Payments]
       summary: Create a payment
       description: Charges a customer's payment method and returns a payment object.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -65,10 +67,12 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '400':
           description: |
-            Missing or invalid required parameters.
-
-            **Cause:** One or more of `amount`, `currency`, or `customer_id` is
-            missing, or `currency` isn't one of the supported codes.
+            Missing or invalid required parameters. See `error` in the
+            response body:
+            - `missing_param`: a required field (`amount`, `currency`, or
+              `customer_id`) wasn't provided.
+            - `invalid_param`: a field was provided but its value is invalid
+              (e.g. `currency` isn't one of `gbp`, `usd`, `eur`).
 
             **Fix:** Check `message` for which field failed, correct the
             request body, and resend.
@@ -79,23 +83,75 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+              examples:
+                missing_param:
+                  summary: A required field was omitted
+                  value:
+                    error: missing_param
+                    message: A required parameter was not provided.
+                invalid_param:
+                  summary: A field's value is invalid
+                  value:
+                    error: invalid_param
+                    message: A parameter value is invalid.
         '402':
           description: |
-            Payment failed (card error).
+            Payment failed (card error). See `error` in the response body:
+            - `card_declined`: declined by the issuing bank.
+            - `insufficient_funds`: the card has insufficient funds.
+            - `expired_card`: the card's expiry date has passed.
+            - `incorrect_cvc`: the CVC number is incorrect.
+            - `processing_error`: a transient error while processing the card.
 
-            **Cause:** The customer's payment method was declined by the
-            issuer (e.g. insufficient funds, expired card, fraud check).
+            **Fix:** For `card_declined`, `insufficient_funds`, and
+            `expired_card`, ask the customer to use a different payment
+            method or contact their issuer. For `incorrect_cvc`, ask them to
+            re-enter the card details. For `processing_error`, retrying
+            later often succeeds.
 
-            **Fix:** Ask the customer to use a different payment method, or
-            contact their card issuer. Don't retry with the same details.
+            In the sandbox, trigger each case by using a test `customer_id`
+            prefix: `cus_declined`, `cus_insufficient`, `cus_expired`,
+            `cus_cvc`, or `cus_processing`.
 
-            **Retry:** Not safe to retry unchanged. A different `amount` or
-            payment method may succeed; the identical request will keep
-            failing.
+            **Retry:** Not safe to retry unchanged for `card_declined`,
+            `insufficient_funds`, `expired_card`, or `incorrect_cvc` — the
+            same request will keep failing. Safe to retry `processing_error`.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+              examples:
+                card_declined:
+                  summary: Declined by the issuing bank
+                  value:
+                    error: card_declined
+                    message: The card was declined by the issuing bank.
+                insufficient_funds:
+                  summary: Not enough balance on the card
+                  value:
+                    error: insufficient_funds
+                    message: The card has insufficient funds.
+                expired_card:
+                  summary: Card expiry date has passed
+                  value:
+                    error: expired_card
+                    message: The card expiry date has passed.
+                incorrect_cvc:
+                  summary: CVC number is wrong
+                  value:
+                    error: incorrect_cvc
+                    message: The CVC number is incorrect.
+                processing_error:
+                  summary: Transient processing failure
+                  value:
+                    error: processing_error
+                    message: An error occurred while processing the card.
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
     get:
       operationId: listPayments
       tags: [Payments]
@@ -147,6 +203,10 @@ paths:
                       $ref: '#/components/schemas/Payment'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
 
   /payments/{id}:
     get:
@@ -175,9 +235,11 @@ paths:
           description: |
             Payment not found.
 
-            **Cause:** No payment exists with the given `id`, either because
-            it was mistyped or belongs to a different account/environment
-            (e.g. a test-mode ID used against production).
+            **Cause:** No payment exists with the given `id` (`error`:
+            `resource_not_found`) — either it was mistyped or it belongs to
+            a different account/environment (e.g. a test-mode ID used
+            against production). In the sandbox, only IDs returned by a
+            prior `createPayment`/`retrievePayment` call resolve.
 
             **Fix:** Double-check the `id` and that you're using the correct
             API key/environment.
@@ -188,6 +250,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+              example:
+                error: resource_not_found
+                message: The requested resource ID does not exist.
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
 
   /refunds:
     post:
@@ -236,6 +305,10 @@ paths:
                     example: succeeded
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
 
   /customers:
     post:
@@ -269,6 +342,10 @@ paths:
                 $ref: '#/components/schemas/Customer'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
     get:
       operationId: listCustomers
       tags: [Customers]
@@ -303,6 +380,10 @@ paths:
                       $ref: '#/components/schemas/Customer'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/ServerError'
 
 components:
   responses:
@@ -310,22 +391,114 @@ components:
       description: |
         Missing or invalid API key.
 
-        **Cause:** The `Authorization` header is missing, malformed, or the
-        bearer token isn't a valid PayFlow API key (or a test-mode key was
-        used against production, or vice versa).
+        **Cause:** One of three things — see `error` in the response body:
+        - `no_api_key`: the `Authorization` header was omitted entirely.
+        - `invalid_api_key`: a header was sent but the token isn't a
+          recognized PayFlow key (wrong scheme, malformed, or a test-mode
+          key used against production, or vice versa).
+        - `api_key_expired`: the key was valid but has since been rotated
+          or revoked.
 
-        **Fix:** Send `Authorization: Bearer <your API key>` and confirm
-        you're using a live key for production, test key for test mode.
+        **Fix:** Send `Authorization: Bearer <your API key>`. For
+        `api_key_expired`, generate a new key in the Dashboard and update
+        the integration.
 
-        **Retry:** Safe, but will keep failing until a valid key for the
-        right environment is supplied.
+        **Retry:** Safe, but will keep failing until a valid, current key
+        for the right environment is supplied.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            no_api_key:
+              summary: No Authorization header sent
+              value:
+                error: no_api_key
+                message: No API key was provided in the request.
+            invalid_api_key:
+              summary: Header present but not a valid key
+              value:
+                error: invalid_api_key
+                message: The API key provided is not valid.
+            api_key_expired:
+              summary: Key was valid but has since expired
+              value:
+                error: api_key_expired
+                message: The API key has expired - rotate it in the Dashboard.
+    RateLimited:
+      description: |
+        Rate limit exceeded.
+
+        **Cause:** Too many requests were sent from this API key within the
+        current window.
+
+        **Fix:** Slow down request rate and honor the `Retry-After` header
+        if present. Consider batching or caching reads where possible.
+
+        **Retry:** Safe after waiting out the window; retrying immediately
+        will fail again.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
           example:
-            error: unauthorized
-            message: Missing or invalid API key.
+            error: rate_limited
+            message: Rate limit exceeded.
+    ServerError:
+      description: |
+        PayFlow server error.
+
+        **Cause:** An unexpected failure on PayFlow's side, not caused by
+        the request.
+
+        **Fix:** Nothing to change in the request. If it persists, contact
+        PayFlow Developer Support with the request ID.
+
+        **Retry:** Safe. Use an idempotency key on write requests so a
+        retry can't create a duplicate if the original actually succeeded.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: server_error
+            message: An unexpected error occurred while processing the request.
+    IdempotencyConflict:
+      description: |
+        Duplicate request (idempotency conflict).
+
+        **Cause:** The `Idempotency-Key` header was reused, but the request
+        body doesn't match the first request that used that key.
+
+        **Fix:** Use a new, unique `Idempotency-Key` for a genuinely
+        different request. Re-send the *original* body if you meant to
+        retry the same operation.
+
+        **Retry:** Not safe to retry unchanged; the same conflict will
+        recur. Retrying with the original body succeeds (idempotent
+        replay) instead of erroring.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: idempotency_conflict
+            message: >-
+              A request with this idempotency key already exists with
+              different parameters.
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: |
+        A unique key you generate per logical operation. Replaying the same
+        key with an identical body returns the original response instead of
+        creating a duplicate; replaying it with a different body returns
+        `409 idempotency_conflict`.
+      schema:
+        type: string
+        example: f47ac10b-58cc-4372-a567-0e02b2c3d479
   securitySchemes:
     bearerAuth:
       type: http
