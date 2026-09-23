@@ -8,6 +8,9 @@ info:
   contact:
     name: PayFlow Developer Support
     url: https://docs.payflow.io
+  license:
+    name: MIT
+    url: https://github.com/inaciobanu/payflow-api/blob/main/LICENSE
 servers:
   - url: https://api.payflow.io/v2
     description: Production
@@ -37,7 +40,7 @@ paths:
               properties:
                 amount:
                   type: integer
-                  description: Amount in minor units (e.g. `2500` = £25.00).
+                  description: Amount in minor units (for example, `2500` = £25.00).
                   example: 4999
                 currency:
                   type: string
@@ -67,12 +70,13 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '400':
           description: |
-            Missing or invalid required parameters. See `error` in the
-            response body:
+            Missing or invalid required parameters.
+
+            **Cause:** See `error` in the response body:
             - `missing_param`: a required field (`amount`, `currency`, or
               `customer_id`) wasn't provided.
             - `invalid_param`: a field was provided but its value is invalid
-              (e.g. `currency` isn't one of `gbp`, `usd`, `eur`).
+              (for example, `currency` isn't one of `gbp`, `usd`, `eur`).
 
             **Fix:** Check `message` for which field failed, correct the
             request body, and resend.
@@ -96,7 +100,9 @@ paths:
                     message: A parameter value is invalid.
         '402':
           description: |
-            Payment failed (card error). See `error` in the response body:
+            Payment failed (card error).
+
+            **Cause:** See `error` in the response body:
             - `card_declined`: declined by the issuing bank.
             - `insufficient_funds`: the card has insufficient funds.
             - `expired_card`: the card's expiry date has passed.
@@ -114,7 +120,7 @@ paths:
             `cus_cvc`, or `cus_processing`.
 
             **Retry:** Not safe to retry unchanged for `card_declined`,
-            `insufficient_funds`, `expired_card`, or `incorrect_cvc` — the
+            `insufficient_funds`, `expired_card`, or `incorrect_cvc`; the
             same request will keep failing. Safe to retry `processing_error`.
           content:
             application/json:
@@ -236,10 +242,11 @@ paths:
             Payment not found.
 
             **Cause:** No payment exists with the given `id` (`error`:
-            `resource_not_found`) — either it was mistyped or it belongs to
-            a different account/environment (e.g. a test-mode ID used
-            against production). In the sandbox, only IDs returned by a
-            prior `createPayment`/`retrievePayment` call resolve.
+            `resource_not_found`), either because it was mistyped or it
+            belongs to a different account/environment (for example, a
+            test-mode ID used against production). In the sandbox, only IDs
+            returned by a prior `createPayment`/`retrievePayment` call
+            resolve.
 
             **Fix:** Double-check the `id` and that you're using the correct
             API key/environment.
@@ -264,6 +271,8 @@ paths:
       tags: [Payments]
       summary: Create a refund
       description: Issues a full or partial refund for a payment.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -303,8 +312,58 @@ paths:
                   status:
                     type: string
                     example: succeeded
+        '400':
+          description: |
+            Missing or invalid required parameters.
+
+            **Cause:** See `error` in the response body:
+            - `missing_param`: `payment_id` wasn't provided.
+            - `invalid_param`: `amount` exceeds the original payment's
+              amount, or `reason` isn't one of the supported values.
+
+            **Fix:** Check `message` for which field failed, correct the
+            request body, and resend.
+
+            **Retry:** Safe once the request body is corrected. Retrying the
+            same unmodified request will fail again.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missing_param:
+                  summary: payment_id was omitted
+                  value:
+                    error: missing_param
+                    message: A required parameter was not provided.
+                invalid_param:
+                  summary: amount exceeds the original payment
+                  value:
+                    error: invalid_param
+                    message: A parameter value is invalid.
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: |
+            Payment not found.
+
+            **Cause:** No payment exists with the given `payment_id`
+            (`error`: `resource_not_found`).
+
+            **Fix:** Double-check `payment_id` and that you're using the
+            correct API key/environment.
+
+            **Retry:** Safe, but will keep failing until `payment_id` is
+            corrected.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: resource_not_found
+                message: The requested resource ID does not exist.
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         '500':
@@ -315,6 +374,8 @@ paths:
       operationId: createCustomer
       tags: [Customers]
       summary: Create a customer
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -340,8 +401,29 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Customer'
+        '400':
+          description: |
+            Invalid parameter value.
+
+            **Cause:** `email` was provided but isn't a valid email address
+            (`error`: `invalid_param`).
+
+            **Fix:** Check `message` for which field failed, correct the
+            request body, and resend.
+
+            **Retry:** Safe once the request body is corrected. Retrying the
+            same unmodified request will fail again.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: invalid_param
+                message: A parameter value is invalid.
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
         '429':
           $ref: '#/components/responses/RateLimited'
         '500':
@@ -391,7 +473,7 @@ components:
       description: |
         Missing or invalid API key.
 
-        **Cause:** One of three things — see `error` in the response body:
+        **Cause:** One of three things; see `error` in the response body:
         - `no_api_key`: the `Authorization` header was omitted entirely.
         - `invalid_api_key`: a header was sent but the token isn't a
           recognized PayFlow key (wrong scheme, malformed, or a test-mode
@@ -525,12 +607,13 @@ components:
       type: http
       scheme: bearer
       description: >
-        Provide your PayFlow API key as a Bearer token, e.g.
+        Provide your PayFlow API key as a Bearer token, for example
         `Authorization: Bearer sk_live_abc123`. See the Authentication guide
         for live vs. test key prefixes.
   schemas:
     Payment:
       type: object
+      required: [id, object, status, amount, currency, created]
       properties:
         id:
           type: string
@@ -559,16 +642,32 @@ components:
           example: cus_9KZFXWr
         email:
           type: string
-          example: inatechwriter@gmail.com
+          example: jane@example.com
         name:
           type: string
           example: Ina Banu
     Error:
       type: object
+      required: [error, message]
       properties:
         error:
           type: string
-          example: bad_request
+          enum:
+            - no_api_key
+            - invalid_api_key
+            - api_key_expired
+            - missing_param
+            - invalid_param
+            - card_declined
+            - insufficient_funds
+            - expired_card
+            - incorrect_cvc
+            - processing_error
+            - resource_not_found
+            - idempotency_conflict
+            - rate_limited
+            - server_error
+          example: missing_param
         message:
           type: string
-          example: Missing required parameters.
+          example: A required parameter was not provided.

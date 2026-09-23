@@ -22,6 +22,21 @@ node server.js
 ```
 The server will boot up and actively listen for traffic at `http://localhost:3000`.
 
+### What the mock actually implements
+
+`payflow.yaml` documents the full API, but `server.js` is a sandbox mock, not
+a full implementation. It currently only serves:
+
+* `POST /v2/payments` — including the `missing_param`/`invalid_param` 400s,
+  sandbox card-error simulation (`cus_declined`, `cus_insufficient`,
+  `cus_expired`, `cus_cvc`, `cus_processing` customer_id prefixes), and
+  `Idempotency-Key` handling.
+* `GET /v2/payments/:id` — only for payments created via the mock above.
+
+Every other documented route (`GET /v2/payments`, `POST /v2/refunds`,
+`POST /v2/customers`, `GET /v2/customers`) isn't implemented yet and will
+return Express's default HTML 404, not the documented `Error` shape.
+
 ## 📦 Docker Container Construction
 
 To test the isolated production container deployment framework, execute your local build engines:

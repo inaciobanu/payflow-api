@@ -26,6 +26,9 @@ jobs:
       - name: Lint OpenAPI spec
         run: npm run lint:spec
 
+      - name: Run contract tests
+        run: npm test
+
   sync-spec:
     needs: validate-spec
     runs-on: ubuntu-latest
