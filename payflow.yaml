@@ -608,7 +608,7 @@ components:
       scheme: bearer
       description: >
         Provide your PayFlow API key as a Bearer token, for example
-        `Authorization: Bearer sk_live_abc123`. See the Authentication guide
+        `Authorization: Bearer YOUR_TEST_KEY`. See the Authentication guide
         for live vs. test key prefixes.
   schemas:
     Payment:
