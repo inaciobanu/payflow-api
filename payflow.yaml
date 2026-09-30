@@ -4,7 +4,7 @@ info:
   version: 2.5.2
   description: >
     Use the PayFlow API to process payments, issue refunds, manage
-    customers, and retrieve transaction history programmatically.
+    customers, and retrieve transaction history.
   contact:
     name: PayFlow Developer Support
     url: https://docs.payflow.io
